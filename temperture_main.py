@@ -8,7 +8,7 @@ def shutdown():
 
 def main():
     port = 'COM3'
-    timer = threading.Timer(300, shutdown)
+    timer = threading.Timer(-1, shutdown)
     timer.start()
     continuous_read(port)
     timer.cancel()
