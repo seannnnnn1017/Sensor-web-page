@@ -2,69 +2,110 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>保留歷史資料的即時折線圖</title>
+  <title>2×2 即時折線圖</title>
   <!-- 引入 Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* 簡單的 2×2 排版示範 */
+    .row {
+      display: flex;
+      flex-direction: row;
+      margin-bottom: 20px; /* 每行之間留些空白 */
+    }
+    .chart-container {
+      flex: 1;
+      margin: 0 10px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Flask SSE 即時折線圖 (保留歷史)</h1>
-  <canvas id="myChart"></canvas>
+  <h1>Flask SSE - 2×2 折線圖</h1>
+
+  <!-- 第一行: 兩個圖 -->
+  <div class="row">
+    <div class="chart-container">
+      <h3>Chart 1</h3>
+      <canvas id="myChart1" width="400" height="300"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Chart 2</h3>
+      <canvas id="myChart2" width="400" height="300"></canvas>
+    </div>
+  </div>
+
+  <!-- 第二行: 兩個圖 -->
+  <div class="row">
+    <div class="chart-container">
+      <h3>Chart 3</h3>
+      <canvas id="myChart3" width="400" height="300"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Chart 4</h3>
+      <canvas id="myChart4" width="400" height="300"></canvas>
+    </div>
+  </div>
 
   <script>
-    // 從後端接收的歷史資料 (以 JSON 傳遞)
-    // Flask模板語法：{{ history|tojson }} 可以將後端的 Python list 轉為前端可用的 JSON
-    const initialData = {{ history | tojson }};
+    //----------------------------------------------------------------
+    // 1. 從後端拿到四張圖的歷史資料
+    const initialData1 = {{ history1|tojson }};
+    const initialData2 = {{ history2|tojson }};
+    const initialData3 = {{ history3|tojson }};
+    const initialData4 = {{ history4|tojson }};
 
-    // Chart.js 設定
-    let ctx = document.getElementById('myChart').getContext('2d');
-
-    // 準備 X 軸標籤與對應值
-    // 這裡簡單假設 X 軸就是 1,2,3,... 順序即可，
-    // 也可以透過其它方式（例如時間字串）呈現。
-    let labels = initialData.map((val, idx) => idx + 1);
-    let dataValues = initialData;
-
-    let chartData = {
-      labels: labels,           // X軸：歷史所有序號
-      datasets: [{
-        label: 'Real-time Value',
-        data: dataValues,       // Y軸：歷史所有數值
-        borderWidth: 1
-      }]
-    };
-
-    let myChart = new Chart(ctx, {
-      type: 'line',
-      data: chartData,
-      options: {
-        scales: {
-          x: {
-            ticks: {
-              autoSkip: true,
-              maxTicksLimit: 10
-            }
-          },
-          y: {
-            beginAtZero: true
+    //----------------------------------------------------------------
+    // 2. 建立 Chart 物件的函式（避免重複）
+    function createChart(ctxId, initData, chartLabel) {
+      let ctx = document.getElementById(ctxId).getContext('2d');
+      let labels = initData.map((_, i) => i + 1);
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: chartLabel,
+            data: initData,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              ticks: { autoSkip: true, maxTicksLimit: 10 }
+            },
+            y: { beginAtZero: true }
           }
         }
-      }
-    });
+      });
+    }
 
-    // 與 SSE 路由(/chart_value) 建立連線
-    const evtSource = new EventSource("/chart_value");
+    //----------------------------------------------------------------
+    // 3. 初始化四張圖
+    let chart1 = createChart('myChart1', initialData1, 'Data 1');
+    let chart2 = createChart('myChart2', initialData2, 'Data 2');
+    let chart3 = createChart('myChart3', initialData3, 'Data 3');
+    let chart4 = createChart('myChart4', initialData4, 'Data 4');
 
-    evtSource.onmessage = function(event) {
-      // 從 SSE 收到的新值
-      let newValue = parseInt(event.data);
+    //----------------------------------------------------------------
+    // 4. SSE 更新函式
+    function setupSSE(url, chart) {
+      const source = new EventSource(url);
+      source.onmessage = function(event) {
+        let newValue = parseFloat(event.data);
+        let nextIndex = chart.data.labels.length + 1;
+        chart.data.labels.push(nextIndex);
+        chart.data.datasets[0].data.push(newValue);
+        chart.update();
+      };
+    }
 
-      // 將新值加入 chart.js 的資料
-      myChart.data.labels.push(myChart.data.labels.length + 1);  // X軸序號 +1
-      myChart.data.datasets[0].data.push(newValue);
+    // 連接四個不同的 SSE 路由
+    setupSSE("/chart_value_1", chart1);
+    setupSSE("/chart_value_2", chart2);
+    setupSSE("/chart_value_3", chart3);
+    setupSSE("/chart_value_4", chart4);
 
-      // 更新圖表
-      myChart.update();
-    };
   </script>
 </body>
 </html>
