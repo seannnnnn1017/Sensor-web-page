@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>即時時間示範</title>
+</head>
+<body>
+    <h1>Flask SSE 實時時間：</h1>
+    <p id="time-display">讀取中...</p>
+
+    <script>
+        // 與 Flask 伺服器建立 SSE 連線
+        const evtSource = new EventSource("/time_stream");
+
+        // 當伺服器推送新訊息 (onmessage) 時，更新頁面內容
+        evtSource.onmessage = function(event) {
+            document.getElementById("time-display").innerText = event.data;
+        };
+    </script>
+</body>
+</html>

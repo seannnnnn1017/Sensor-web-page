@@ -1,21 +1,70 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>即時時間示範</title>
+  <meta charset="UTF-8">
+  <title>保留歷史資料的即時折線圖</title>
+  <!-- 引入 Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>Flask SSE 實時時間：</h1>
-    <p id="time-display">讀取中...</p>
+  <h1>Flask SSE 即時折線圖 (保留歷史)</h1>
+  <canvas id="myChart"></canvas>
 
-    <script>
-        // 與 Flask 伺服器建立 SSE 連線
-        const evtSource = new EventSource("/time_stream");
+  <script>
+    // 從後端接收的歷史資料 (以 JSON 傳遞)
+    // Flask模板語法：{{ history|tojson }} 可以將後端的 Python list 轉為前端可用的 JSON
+    const initialData = {{ history | tojson }};
 
-        // 當伺服器推送新訊息 (onmessage) 時，更新頁面內容
-        evtSource.onmessage = function(event) {
-            document.getElementById("time-display").innerText = event.data;
-        };
-    </script>
+    // Chart.js 設定
+    let ctx = document.getElementById('myChart').getContext('2d');
+
+    // 準備 X 軸標籤與對應值
+    // 這裡簡單假設 X 軸就是 1,2,3,... 順序即可，
+    // 也可以透過其它方式（例如時間字串）呈現。
+    let labels = initialData.map((val, idx) => idx + 1);
+    let dataValues = initialData;
+
+    let chartData = {
+      labels: labels,           // X軸：歷史所有序號
+      datasets: [{
+        label: 'Real-time Value',
+        data: dataValues,       // Y軸：歷史所有數值
+        borderWidth: 1
+      }]
+    };
+
+    let myChart = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        scales: {
+          x: {
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10
+            }
+          },
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+
+    // 與 SSE 路由(/chart_value) 建立連線
+    const evtSource = new EventSource("/chart_value");
+
+    evtSource.onmessage = function(event) {
+      // 從 SSE 收到的新值
+      let newValue = parseInt(event.data);
+
+      // 將新值加入 chart.js 的資料
+      myChart.data.labels.push(myChart.data.labels.length + 1);  // X軸序號 +1
+      myChart.data.datasets[0].data.push(newValue);
+
+      // 更新圖表
+      myChart.update();
+    };
+  </script>
 </body>
 </html>
