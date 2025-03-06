@@ -2,6 +2,7 @@ from flask import Flask, render_template, Response
 import time
 import datetime
 import random
+from temp_py_package import continuous_read
 app = Flask(__name__)
 
 # 全域列表用於儲存歷史資料（僅作示範，實際建議存資料庫）
@@ -26,9 +27,10 @@ def chart_value():
     SSE 路由：每秒產生一個新數值，推給前端，並寫入 HISTORY_DATA 中。
     """
     def generate_value():
+        port = 'COM7'
         global COUNTER, HISTORY_DATA
         while True:
-            COUNTER =random.randint(1,100)
+            COUNTER =continuous_read(port)
             # 將新值加入到全域的歷史資料清單裡
             HISTORY_DATA.append(COUNTER)
 
