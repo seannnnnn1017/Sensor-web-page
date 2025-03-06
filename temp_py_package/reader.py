@@ -24,29 +24,21 @@ def read_temperature(ser, slave_addr=0x03, start_addr=0x0000, num_words=1):
         return None
     return convert_raw_to_temperature(raw_value)
 
-def continuous_read(port, baudrate=57600, interval=1):
+def continuous_read(port, baudrate=57600):
     """
-    持續讀取溫度資料並印出
+    每呼叫一次連接 serial port、讀取一次溫度資料並回傳讀取結果
     :param port: Serial port
     :param baudrate: 傳輸速率 (預設 57600)
-    :param interval: 每次讀取間隔秒數 (預設 1 秒)
+    :return: 溫度數值 (若失敗則回傳 None)
     """
     try:
         ser = serial.Serial(port, baudrate, bytesize=8, parity='N', stopbits=1, timeout=1)
     except Exception as e:
         print("無法開啟 serial port:", e)
-        return
+        return None
 
-    print("開始讀取溫度資料 ...")
     try:
-        while True:
-            temp = read_temperature(ser)
-            if temp is not None:
-                print("{:.1f}度C".format(temp))
-            else:
-                print("讀取溫度失敗")
-            time.sleep(interval)
-    except KeyboardInterrupt:
-        print("使用者中斷，結束程式")
+        temp = read_temperature(ser)
+        return temp
     finally:
         ser.close()

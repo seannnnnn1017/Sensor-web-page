@@ -1,17 +1,15 @@
-import threading
-import sys
 from temp_py_package import continuous_read
-
-def shutdown():
-    print("五分鐘已到，自動關閉程式。")
-    sys.exit(0)
+import time
 
 def main():
-    port = 'COM3'
-    timer = threading.Timer(-1, shutdown)
-    timer.start()
-    continuous_read(port)
-    timer.cancel()
+    port = 'COM7'
+    while True:
+        temp = continuous_read(port)
+        if temp is not None:
+            print("{:.1f}度C".format(temp))
+        else:
+            print("讀取溫度失敗")
+        time.sleep(1)
 
 if __name__ == '__main__':
     main()
