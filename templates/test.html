@@ -2,47 +2,231 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2×2 即時折線圖</title>
   <!-- 引入 Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* 簡單的 2×2 排版示範 */
+    /* 重置基本樣式 */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    /* 主要容器樣式 */
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      padding: 10px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      height: 40px; /* 固定標題高度 */
+    }
+
+    /* 控制面板區域 */
+    .control-panel {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+
+    .btn-primary {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .btn-danger {
+      background-color: #dc3545;
+      color: white;
+    }
+
+    .btn-success {
+      background-color: #28a745;
+      color: white;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    /* 圖表行樣式 */
     .row {
       display: flex;
-      flex-direction: row;
-      margin-bottom: 20px; /* 每行之間留些空白 */
+      flex: 1;
+      width: 100%;
     }
+
+    /* 圖表容器樣式 */
     .chart-container {
       flex: 1;
-      margin: 0 10px;
+      margin: 5px;
+      position: relative;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      height: 25px;
+    }
+
+    .chart-header h3 {
+      text-align: center;
+      flex-grow: 1;
+    }
+
+    .chart-controls {
+      display: flex;
+      gap: 5px;
+    }
+
+    .chart-btn {
+      padding: 2px 8px;
+      font-size: 0.8rem;
+      border-radius: 3px;
+    }
+
+    /* 狀態指示器 */
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+    }
+
+    .status-active {
+      background-color: #28a745;
+    }
+
+    .status-paused {
+      background-color: #dc3545;
+    }
+
+    /* 圖表包裝器，用於控制圖表大小 */
+    .chart-wrapper {
+      flex: 1;
+      width: 100%;
+      position: relative;
+    }
+
+    /* 媒體查詢，支持不同屏幕尺寸 */
+    @media (max-width: 768px) {
+      .row {
+        flex-direction: column;
+      }
+      .dashboard {
+        height: 100%;
+        overflow-y: auto;
+      }
+      .control-panel {
+        flex-wrap: wrap;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Flask SSE - 2×2 折線圖</h1>
+  <div class="dashboard">
+    <h1>即時檢控面板</h1>
 
-  <!-- 第一行: 兩個圖 -->
-  <div class="row">
-    <div class="chart-container">
-      <h3>Chart 1</h3>
-      <canvas id="myChart1" width="400" height="300"></canvas>
+    <!-- 控制面板 -->
+    <div class="control-panel">
+      <button id="pauseAllBtn" class="btn btn-danger">暫停全部</button>
+      <button id="resumeAllBtn" class="btn btn-success">恢復全部</button>
     </div>
-    <div class="chart-container">
-      <h3>Chart 2</h3>
-      <canvas id="myChart2" width="400" height="300"></canvas>
-    </div>
-  </div>
 
-  <!-- 第二行: 兩個圖 -->
-  <div class="row">
-    <div class="chart-container">
-      <h3>Chart 3</h3>
-      <canvas id="myChart3" width="400" height="300"></canvas>
+    <!-- 第一行: 兩個圖 -->
+    <div class="row">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="status-indicator status-active" id="status1"></div>
+          <h3>溫度感測器</h3>
+          <div class="chart-controls">
+            <button class="btn chart-btn btn-danger" id="pauseBtn1">暫停</button>
+            <button class="btn chart-btn btn-success" id="resumeBtn1">恢復</button>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="myChart1"></canvas>
+        </div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="status-indicator status-active" id="status2"></div>
+          <h3>計數器</h3>
+          <div class="chart-controls">
+            <button class="btn chart-btn btn-danger" id="pauseBtn2">暫停</button>
+            <button class="btn chart-btn btn-success" id="resumeBtn2">恢復</button>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="myChart2"></canvas>
+        </div>
+      </div>
     </div>
-    <div class="chart-container">
-      <h3>Chart 4</h3>
-      <canvas id="myChart4" width="400" height="300"></canvas>
+
+    <!-- 第二行: 兩個圖 -->
+    <div class="row">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="status-indicator status-active" id="status3"></div>
+          <h3>隨機數值</h3>
+          <div class="chart-controls">
+            <button class="btn chart-btn btn-danger" id="pauseBtn3">暫停</button>
+            <button class="btn chart-btn btn-success" id="resumeBtn3">恢復</button>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="myChart3"></canvas>
+        </div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="status-indicator status-active" id="status4"></div>
+          <h3>浮點隨機值</h3>
+          <div class="chart-controls">
+            <button class="btn chart-btn btn-danger" id="pauseBtn4">暫停</button>
+            <button class="btn chart-btn btn-success" id="resumeBtn4">恢復</button>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="myChart4"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -55,57 +239,183 @@
     const initialData4 = {{ history4|tojson }};
 
     //----------------------------------------------------------------
-    // 2. 建立 Chart 物件的函式（避免重複）
-    function createChart(ctxId, initData, chartLabel) {
-      let ctx = document.getElementById(ctxId).getContext('2d');
-      let labels = initData.map((_, i) => i + 1);
-      return new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: chartLabel,
-            data: initData,
-            borderWidth: 1
-          }]
-        },
-        options: {
-          scales: {
-            x: {
-              ticks: { autoSkip: true, maxTicksLimit: 10 }
-            },
-            y: { beginAtZero: true }
-          }
-        }
-      });
-    }
-
-    //----------------------------------------------------------------
-    // 3. 初始化四張圖
-    let chart1 = createChart('myChart1', initialData1, 'Data 1');
-    let chart2 = createChart('myChart2', initialData2, 'Data 2');
-    let chart3 = createChart('myChart3', initialData3, 'Data 3');
-    let chart4 = createChart('myChart4', initialData4, 'Data 4');
-
-    //----------------------------------------------------------------
-    // 4. SSE 更新函式
-    function setupSSE(url, chart) {
-      const source = new EventSource(url);
-      source.onmessage = function(event) {
-        let newValue = parseFloat(event.data);
-        let nextIndex = chart.data.labels.length + 1;
-        chart.data.labels.push(nextIndex);
-        chart.data.datasets[0].data.push(newValue);
-        chart.update();
+    // 2. 等待DOM和窗口完全加載後再創建圖表
+    window.addEventListener('DOMContentLoaded', () => {
+      // 暫停控制變數
+      const pauseStatus = {
+        chart1: false,
+        chart2: false,
+        chart3: false,
+        chart4: false
       };
-    }
+      
+      // 全局存儲 EventSource 實例，以便能夠關閉和重開
+      const eventSources = {
+        chart1: null,
+        chart2: null,
+        chart3: null,
+        chart4: null
+      };
 
-    // 連接四個不同的 SSE 路由
-    setupSSE("/chart_value_1", chart1);
-    setupSSE("/chart_value_2", chart2);
-    setupSSE("/chart_value_3", chart3);
-    setupSSE("/chart_value_4", chart4);
+      // 圖表配置選項
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: { autoSkip: true, maxTicksLimit: 10 }
+          },
+          y: { beginAtZero: true }
+        },
+        animation: {
+          duration: 300 // 較短的動畫時間，讓更新更流暢
+        }
+      };
 
+      // 創建圖表的函數
+      function createChart(ctxId, initData, chartLabel) {
+        const ctx = document.getElementById(ctxId).getContext('2d');
+        const labels = initData.map((_, i) => i + 1);
+        return new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: chartLabel,
+              data: initData,
+              borderColor: getRandomColor(),
+              borderWidth: 2,
+              pointRadius: 2,
+              fill: false
+            }]
+          },
+          options: chartOptions
+        });
+      }
+
+      // 生成隨機顏色
+      function getRandomColor() {
+        const colors = [
+          'rgb(75, 192, 192)',
+          'rgb(255, 99, 132)',
+          'rgb(54, 162, 235)',
+          'rgb(255, 159, 64)'
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+
+      //----------------------------------------------------------------
+      // 3. 初始化四張圖
+      const chart1 = createChart('myChart1', initialData1, '溫度 (°C)');
+      const chart2 = createChart('myChart2', initialData2, '計數值');
+      const chart3 = createChart('myChart3', initialData3, '隨機值');
+      const chart4 = createChart('myChart4', initialData4, '浮點隨機值');
+
+      //----------------------------------------------------------------
+      // 4. SSE 更新函式
+      function setupSSE(url, chart, chartId) {
+        // 如果已經有連線，先關閉
+        if (eventSources[chartId]) {
+          eventSources[chartId].close();
+        }
+        
+        // 建立新的 EventSource 連線
+        const source = new EventSource(url);
+        eventSources[chartId] = source;
+        
+        source.onmessage = function(event) {
+          // 如果圖表已暫停，不更新數據
+          if (pauseStatus[chartId]) {
+            return;
+          }
+          
+          const newValue = parseFloat(event.data);
+          const nextIndex = chart.data.labels.length + 1;
+          
+          // 限制顯示的數據點數量以提高性能
+          const maxDataPoints = 50;
+          if (chart.data.labels.length > maxDataPoints) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+          }
+          
+          chart.data.labels.push(nextIndex);
+          chart.data.datasets[0].data.push(newValue);
+          chart.update('none'); // 使用 'none' 減少更新時的動畫
+        };
+        
+        // 錯誤處理
+        source.onerror = function() {
+          console.error(`SSE connection error for ${chartId}`);
+          // 如果沒有暫停，嘗試重新連接
+          if (!pauseStatus[chartId]) {
+            setTimeout(() => {
+              source.close();
+              setupSSE(url, chart, chartId);
+            }, 2000);
+          }
+        };
+        
+        return source;
+      }
+
+      // 暫停指定圖表的資料更新
+      function pauseChart(chartId) {
+        pauseStatus[chartId] = true;
+        const statusIndicator = document.getElementById(`status${chartId.slice(-1)}`);
+        statusIndicator.classList.remove('status-active');
+        statusIndicator.classList.add('status-paused');
+      }
+
+      // 恢復指定圖表的資料更新
+      function resumeChart(chartId, url, chart) {
+        pauseStatus[chartId] = false;
+        const statusIndicator = document.getElementById(`status${chartId.slice(-1)}`);
+        statusIndicator.classList.remove('status-paused');
+        statusIndicator.classList.add('status-active');
+        
+        // 重新連接 SSE
+        setupSSE(url, chart, chartId);
+      }
+
+      // 設置按鈕事件監聽器
+      document.getElementById('pauseBtn1').addEventListener('click', () => pauseChart('chart1'));
+      document.getElementById('pauseBtn2').addEventListener('click', () => pauseChart('chart2'));
+      document.getElementById('pauseBtn3').addEventListener('click', () => pauseChart('chart3'));
+      document.getElementById('pauseBtn4').addEventListener('click', () => pauseChart('chart4'));
+
+      document.getElementById('resumeBtn1').addEventListener('click', () => resumeChart('chart1', '/chart_value_1', chart1));
+      document.getElementById('resumeBtn2').addEventListener('click', () => resumeChart('chart2', '/chart_value_2', chart2));
+      document.getElementById('resumeBtn3').addEventListener('click', () => resumeChart('chart3', '/chart_value_3', chart3));
+      document.getElementById('resumeBtn4').addEventListener('click', () => resumeChart('chart4', '/chart_value_4', chart4));
+
+      // 暫停全部按鈕
+      document.getElementById('pauseAllBtn').addEventListener('click', () => {
+        pauseChart('chart1');
+        pauseChart('chart2');
+        pauseChart('chart3');
+        pauseChart('chart4');
+      });
+
+      // 恢復全部按鈕
+      document.getElementById('resumeAllBtn').addEventListener('click', () => {
+        resumeChart('chart1', '/chart_value_1', chart1);
+        resumeChart('chart2', '/chart_value_2', chart2);
+        resumeChart('chart3', '/chart_value_3', chart3);
+        resumeChart('chart4', '/chart_value_4', chart4);
+      });
+
+      // 連接四個不同的 SSE 路由
+      setupSSE("/chart_value_1", chart1, 'chart1');
+      setupSSE("/chart_value_2", chart2, 'chart2');
+      setupSSE("/chart_value_3", chart3, 'chart3');
+      setupSSE("/chart_value_4", chart4, 'chart4');
+    });
+
+    // 窗口大小變化時調整圖表
+    window.addEventListener('resize', function() {
+      // Chart.js 的 responsive 選項會自動處理大小調整
+    });
   </script>
 </body>
 </html>

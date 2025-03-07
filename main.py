@@ -18,7 +18,7 @@ HISTORY_DATA_4 = []
 # 首頁，指示用
 @app.route('/')
 def index():
-    return '<h1>首頁：請前往 /chart_test 查看 4 張即時折線圖</h1>'
+    return '<a href="./chart_test">監控器</a>'
 
 # ---------------------------------------------------------------------
 # 主頁面：顯示所有圖表
@@ -37,7 +37,7 @@ def chart_test():
 
 # ---------------------------------------------------------------------
 # (1) SSE 路由：第一張圖 - 讀取 COM7 (continuous_read)
-@app.route('/chart_value_1')
+@app.route('/chart_value_1') #temp sensor
 def chart_value_1():
     def generate_value_1():
         port = 'COM7'
@@ -63,7 +63,7 @@ def chart_value_2():
             counter += 1
             HISTORY_DATA_2.append(counter)
             yield f"data: {counter}\n\n"
-            time.sleep(1)  # 每秒推送一次
+            time.sleep(0.5)  # 每秒推送一次
     return Response(generate_value_2(), mimetype="text/event-stream")
 
 # ---------------------------------------------------------------------
