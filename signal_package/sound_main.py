@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from signal_package.audio_recorder import AudioRecorder
+from audio_recorder import AudioRecorder
 from signal_processor import process_and_plot, plot_spectrogram
 
 def main():
@@ -19,7 +19,7 @@ def main():
     max_history_samples = int(history_duration * sample_rate)
 
     # 初始化錄音器
-    recorder = AudioRecorder(sample_rate=sample_rate, channels=1, chunk=1024, verbose=True)
+    recorder = AudioRecorder(sample_rate=sample_rate, channels=0, chunk=1024, verbose=True)
 
     num_iterations = int(duration / update_interval)
     for i in range(num_iterations):
