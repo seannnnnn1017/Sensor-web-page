@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from audio_recorder import AudioRecorder
+from signal_package.audio_recorder import AudioRecorder
 from signal_processor import process_and_plot, plot_spectrogram
 
 def main():
