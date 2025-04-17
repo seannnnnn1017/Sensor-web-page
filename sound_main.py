@@ -1,12 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from signal_package import process_and_plot, plot_spectrogram,AudioRecorder
+from signal_package import AudioRecorder,process_and_plot, plot_spectrogram,save_spectrogram_to_tdms
 
-def main():
-    sample_rate = 22050
-    duration = 100
-    update_interval = 0.1
-    history_duration = 100
+import datetime
+
+
+def main(sample_rate = 22050, #  # 音訊採樣率
+         duration = 10, # # 錄音持續時間
+         update_interval = 0.1, # # 更新間隔
+         history_duration = 100): # # 音訊歷史記錄持續時間
+
 
     plt.ion()
     fig, ax = plt.subplots(3, 1, figsize=(10, 10))
@@ -18,7 +21,7 @@ def main():
     max_history_samples = int(history_duration * sample_rate)
 
     # 初始化錄音器
-    recorder = AudioRecorder(sample_rate=sample_rate, channels=1, chunk=1024, verbose=True)
+    recorder = AudioRecorder(sample_rate=sample_rate, channels=None, chunk=1024, verbose=True)
 
     num_iterations = int(duration / update_interval)
     for i in range(num_iterations):
@@ -43,8 +46,12 @@ def main():
     # 錄音結束，關閉音訊串流
     recorder.close()
 
-    # ★ 在全部秒數跑完後，再做最後一次完整的頻譜圖，這次加上 colorbar ★
-    plot_spectrogram(audio_history, sample_rate, ax_spectrogram, draw_colorbar=True)
+    # 生成最終頻譜圖並儲存數據
+    spec, freqs, bins = plot_spectrogram(audio_history, sample_rate, ax_spectrogram, draw_colorbar=True)
+    save_spectrogram_to_tdms(spec, freqs, bins, sample_rate, NFFT=256, noverlap=128, 
+                         experiment_id="EXP_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+                         filename='spectrogram.tdms')
+
 
     plt.ioff()
     plt.show()
