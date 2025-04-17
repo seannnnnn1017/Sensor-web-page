@@ -80,11 +80,19 @@ def plot_spectrogram(signal_history, sample_rate, ax_spectrogram, draw_colorbar=
     - sample_rate: 採樣率
     - ax_spectrogram: 用於顯示频谱图的 matplotlib 軸
     - draw_colorbar: 是否在圖表旁加入 colorbar（預設為 False）
+    
+    返回值：
+    - spec: spectrogram 數據 (實數數據，形狀為 (n_freqs, n_times))
+    - freqs: 頻率軸
+    - bins: 時間軸
     """
+    import numpy as np
+    
     ax_spectrogram.cla()
     NFFT = 256
     noverlap = 128
-
+    
+    # 使用 matplotlib 的 specgram 函數生成頻譜圖
     spec, freqs, bins, im = ax_spectrogram.specgram(
         signal_history,
         NFFT=NFFT,
@@ -92,16 +100,26 @@ def plot_spectrogram(signal_history, sample_rate, ax_spectrogram, draw_colorbar=
         noverlap=noverlap,
         cmap='jet'
     )
+    
+    # 確保 spec 是實數數據 (取模值)
+    if np.iscomplexobj(spec):
+        spec = np.abs(spec)
+    
+    # 確保數據類型是 float64，與 TDMS 的 DT_DOUBLE 相匹配
+    spec = spec.astype(np.float64)
+    freqs = freqs.astype(np.float64)
+    bins = bins.astype(np.float64)
+    
     # 設定圖像平滑效果
     im.set_interpolation('bilinear')
-
+    
     # 當 draw_colorbar 為 True 時加入 colorbar
     if draw_colorbar:
         cbar = ax_spectrogram.figure.colorbar(im, ax=ax_spectrogram)
         cbar.set_label('Amplitude (dB)')
-
+    
     ax_spectrogram.set_title('Spectrogram')
     ax_spectrogram.set_xlabel('Time (s)')
     ax_spectrogram.set_ylabel('Frequency (Hz)')
-
     
+    return spec, freqs, bins
