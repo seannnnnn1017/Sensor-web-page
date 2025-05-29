@@ -287,7 +287,11 @@ class SensorIntegrationGUI:
                 self.start_temperature_monitoring()
             else:
                 self.temp_label.config(text="溫度: 未啟用")
-            
+            if audio_enabled:
+                self.start_audio_monitoring(sample_rate, update_interval, history_duration, duration)
+            else:
+                # 如果音訊監測未啟用，仍需要處理執行時間
+                self.start_timer_only(duration)
             if rangefinder_enabled:  # 新增
                 self.start_rangefinder_monitoring(distance_interval, refl_mode)
             else:
