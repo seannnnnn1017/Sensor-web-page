@@ -686,17 +686,7 @@ class SensorIntegrationGUI:
                             f"{data['relative']:.3f}"
                         ])
                 print(f"距離數據已儲存至: {distance_filename}")
-             # 修改完成訊息
-        files_saved = []
-        if len(audio_history) > 0:
-            files_saved.append(f"spectrogram_{experiment_id}.tdms")
-        if self.distance_data:
-            files_saved.append(f"distance_{experiment_id}.csv")
-        
-        if files_saved:
-            files_text = "\n".join(files_saved)
-            self.root.after(0, lambda: messagebox.showinfo("完成", 
-                f"監測完成！\n數據已儲存至:\n{files_text}"))
+            
         except Exception as e:
             print(f"使用signal_package儲存數據錯誤: {e}")
             self.root.after(0, lambda: messagebox.showwarning("警告", 
