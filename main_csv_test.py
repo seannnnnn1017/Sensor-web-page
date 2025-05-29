@@ -40,7 +40,8 @@ class SensorIntegrationGUI:
         self.rangefinder_device = None
         self.rangefinder_thread = None
         self.distance_data = []  # 儲存距離數據
-        
+        self.temperature_data = []   # ← 放在 self.distance_data 之後
+
         # 測距儀參數
         self.BASIC_REF = 50.0
         self.OUT_NO = 0
@@ -349,6 +350,12 @@ class SensorIntegrationGUI:
                     
                     if temp is not None:
                         consecutive_failures = 0  # 重置失敗計數
+                        current_time = time.time()                       # 新增
+                        self.temperature_data.append({                   # 新增
+                            'timestamp': current_time,                   # 新增
+                            'temp': temp                                 # 新增
+                        })                                               # 新增
+
                         if sensor_disconnected:
                             # 感測器重新連接成功
                             self.root.after(0, lambda: messagebox.showinfo("通知", "溫度感測器已重新連接"))
@@ -691,6 +698,22 @@ class SensorIntegrationGUI:
                         ])
                 print(f"距離數據已儲存至: {distance_filename}")
             
+            if self.temperature_data:
+                temp_filename = f'temperature_{experiment_id}.csv'
+                with open(temp_filename, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Timestamp', 'Elapsed(s)', 'Temperature(C)'])
+                    start_time = self.temperature_data[0]['timestamp']
+                    for entry in self.temperature_data:
+                        elapsed = entry['timestamp'] - start_time
+                        writer.writerow([
+                            entry['timestamp'],
+                            f"{elapsed:.3f}",
+                            f"{entry['temp']:.2f}"
+                        ])
+                print(f"溫度數據已儲存至: {temp_filename}")
+
+                        
         except Exception as e:
             print(f"使用signal_package儲存數據錯誤: {e}")
             self.root.after(0, lambda: messagebox.showwarning("警告", 

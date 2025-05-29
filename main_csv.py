@@ -8,6 +8,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import datetime
 import serial.tools.list_ports
 import pyaudio
+from rangefinder import LKIF2Device
+from rangefinder.constants import RC_OK, LKIF_ABLEMODE_AUTO
 
 # 導入你的自定義模組
 from temp_py_package import continuous_read
@@ -34,6 +36,16 @@ class SensorIntegrationGUI:
         self.refresh_com_ports()
         self.refresh_audio_devices()
         
+        # 測距儀相關變數
+        self.rangefinder_device = None
+        self.rangefinder_thread = None
+        self.distance_data = []  # 儲存距離數據
+        
+        # 測距儀參數
+        self.BASIC_REF = 50.0
+        self.OUT_NO = 0
+        self.SAMPLING_US = 1000
+        self.RANGE_CODE = 0
     def setup_gui(self):
         # 主框架
         main_frame = ttk.Frame(self.root, padding="10")
@@ -114,15 +126,11 @@ class SensorIntegrationGUI:
         plot_frame = ttk.LabelFrame(main_frame, text="音訊監測", padding="5")
         plot_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.fig, self.axes = plt.subplots(3, 1, figsize=(10, 6), 
+        self.fig, self.axes = plt.subplots(3, 1, figsize=(10, 10), 
                                         gridspec_kw={'height_ratios': [2, 2, 2]})
         self.ax_waveform = self.axes[0]
         self.ax_spectrum = self.axes[1]
         self.ax_spectrogram = self.axes[2]
-
-        # 繪製各子圖（略）
-
-        #plt.tight_layout()
 
         
         self.canvas = FigureCanvasTkAgg(self.fig, plot_frame)
@@ -133,7 +141,23 @@ class SensorIntegrationGUI:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(3, weight=1)
-    
+        
+        # 測距儀設定（在音訊設備選擇後面加入）
+        ttk.Label(settings_frame, text="測距儀模式:").grid(row=0, column=5, sticky=tk.W, padx=5)
+        self.refl_mode_var = tk.StringVar(value="0")
+        refl_combo = ttk.Combobox(settings_frame, textvariable=self.refl_mode_var, 
+                                values=["0-漫反射", "1-鏡面反射"], width=12)
+        refl_combo.grid(row=0, column=6, padx=5)
+        
+        # 測距儀間隔設定（在執行時間設定下面加入）
+        ttk.Label(settings_frame, text="測距間隔(秒):").grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
+        self.distance_interval_var = tk.StringVar(value="0.1")
+        distance_entry = ttk.Entry(settings_frame, textvariable=self.distance_interval_var, width=10)
+        distance_entry.grid(row=1, column=4, padx=5, pady=5)
+
+        # 距離顯示（在溫度顯示後面）
+        self.distance_label = ttk.Label(status_frame, text="距離: -- mm", font=("Arial", 12))
+        self.distance_label.grid(row=0, column=1, sticky=tk.W, padx=10)
     def refresh_com_ports(self):
         """重新整理可用的COM端口"""
         try:
@@ -201,6 +225,7 @@ class SensorIntegrationGUI:
             warnings = []
             temp_enabled = True
             audio_enabled = True
+            rangefinder_enabled = True
             
             # 檢查溫度感測器
             if not self.com_temp_var.get():
@@ -211,9 +236,20 @@ class SensorIntegrationGUI:
             if not self.audio_device_var.get() or self.audio_device_var.get() in ["無可用音訊設備", "音訊設備檢測失敗"]:
                 warnings.append("• 未選擇有效的音訊設備，音訊監測將被停用")
                 audio_enabled = False
+            # 檢查測距儀
+            try:
+                test_device = LKIF2Device()
+                rc = test_device.open()
+                if rc != RC_OK:
+                    warnings.append("• 測距儀連接失敗，距離監測將被停用")
+                    rangefinder_enabled = False
+                test_device.close()
+            except Exception:
+                warnings.append("• 測距儀初始化失敗，距離監測將被停用")
+                rangefinder_enabled = False
             
-            # 如果兩個感測器都無效，則不允許啟動
-            if not temp_enabled and not audio_enabled:
+            # 如果三個感測器都無效，則不允許啟動
+            if not temp_enabled and not audio_enabled and not rangefinder_enabled:
                 messagebox.showerror("錯誤", "至少需要啟用一個感測器才能開始監測")
                 return
             
@@ -228,6 +264,9 @@ class SensorIntegrationGUI:
             sample_rate = int(self.sample_rate_var.get())
             update_interval = float(self.update_interval_var.get())
             history_duration = float(self.history_duration_var.get())
+            # 新增測距儀參數驗證
+            distance_interval = float(self.distance_interval_var.get())
+            refl_mode = int(self.refl_mode_var.get().split('-')[0])
             
             # 設定狀態
             self.running = True
@@ -235,25 +274,28 @@ class SensorIntegrationGUI:
             self.stop_button.config(state=tk.NORMAL)
             
             # 更新狀態顯示
-            if temp_enabled and audio_enabled:
-                self.status_label.config(text="狀態: 監測中 (溫度+音訊)")
-            elif temp_enabled:
-                self.status_label.config(text="狀態: 監測中 (僅溫度)")
-            elif audio_enabled:
-                self.status_label.config(text="狀態: 監測中 (僅音訊)")
+            status_parts = []
+            if temp_enabled: status_parts.append("溫度")
+            if audio_enabled: status_parts.append("音訊")
+            if rangefinder_enabled: status_parts.append("距離")
             
+            if status_parts:
+                self.status_label.config(text=f"狀態: 監測中 ({'+'.join(status_parts)})")
             # 開始監測執行緒
+            
             if temp_enabled:
                 self.start_temperature_monitoring()
             else:
-                # 如果溫度感測器未啟用，顯示提示訊息
                 self.temp_label.config(text="溫度: 未啟用")
-            
             if audio_enabled:
                 self.start_audio_monitoring(sample_rate, update_interval, history_duration, duration)
             else:
                 # 如果音訊監測未啟用，仍需要處理執行時間
                 self.start_timer_only(duration)
+            if rangefinder_enabled:  # 新增
+                self.start_rangefinder_monitoring(distance_interval, refl_mode)
+            else:
+                self.distance_label.config(text="距離: 未啟用")
             
         except ValueError as e:
             messagebox.showerror("錯誤", f"參數輸入錯誤: {e}")
@@ -275,11 +317,22 @@ class SensorIntegrationGUI:
                 pass
             self.audio_recorder = None
         
+        # 關閉測距儀（新增）
+        if self.rangefinder_device:
+            try:
+                self.rangefinder_device.close()
+            except:
+                pass
+            self.rangefinder_device = None
+        
         # 等待執行緒結束
         if self.temp_thread and self.temp_thread.is_alive():
             self.temp_thread.join(timeout=1)
         if self.audio_thread and self.audio_thread.is_alive():
             self.audio_thread.join(timeout=1)
+        if self.rangefinder_thread and self.rangefinder_thread.is_alive():  # 新增
+            self.rangefinder_thread.join(timeout=1)
+
     
     def start_temperature_monitoring(self):
         """開始溫度監測執行緒"""
@@ -421,6 +474,104 @@ class SensorIntegrationGUI:
         self.audio_thread = threading.Thread(target=audio_worker, daemon=True)
         self.audio_thread.start()
     
+    def start_rangefinder_monitoring(self, interval, refl_mode):
+        """開始測距儀監測執行緒"""
+        def rangefinder_worker():
+            try:
+                self.rangefinder_device = LKIF2Device()
+                rc = self.rangefinder_device.open()
+                if rc != RC_OK:
+                    raise RuntimeError(f"測距儀開啟失敗: 0x{rc:X}")
+                
+                # 初始化感測器
+                self.initialize_rangefinder()
+                
+                # 參數設定
+                self.rangefinder_device.stop_measure()
+                self.rangefinder_device.dll.LKIF2_SetSamplingCycle(self.OUT_NO, self.SAMPLING_US)
+                self.rangefinder_device.dll.LKIF2_SetRange(self.OUT_NO, self.RANGE_CODE)
+                self.rangefinder_device.dll.LKIF2_SetReflectionMode(self.OUT_NO, refl_mode)
+                self.rangefinder_device.dll.LKIF2_SetBasicPoint(self.OUT_NO, 0)
+                self.rangefinder_device.start_measure()
+                
+                consecutive_failures = 0
+                max_failures = 10
+                sensor_disconnected = False
+                
+                while self.running:
+                    try:
+                        d = self.rangefinder_device.read_single(self.OUT_NO)
+                        if d['FloatResult'] == 'VALID':
+                            rel_distance = d['Value']
+                            abs_distance = self.BASIC_REF + rel_distance
+                            
+                            # 儲存數據
+                            current_time = time.time()
+                            self.distance_data.append({
+                                'timestamp': current_time,
+                                'absolute': abs_distance,
+                                'relative': rel_distance
+                            })
+                            
+                            consecutive_failures = 0
+                            if sensor_disconnected:
+                                self.root.after(0, lambda: messagebox.showinfo("通知", "測距儀已重新連接"))
+                                sensor_disconnected = False
+                            
+                            self.root.after(0, lambda d=abs_distance: 
+                                        self.distance_label.config(text=f"距離: {d:.1f} mm"))
+                        else:
+                            consecutive_failures += 1
+                            self.root.after(0, lambda: self.distance_label.config(text="距離: 讀取失敗"))
+                            
+                            if consecutive_failures >= max_failures and not sensor_disconnected:
+                                sensor_disconnected = True
+                                self.root.after(0, lambda: messagebox.showwarning("警告", 
+                                    "測距儀可能已斷線，監測將繼續但不會讀取距離數據"))
+                                self.root.after(0, lambda: self.distance_label.config(text="距離: 感測器斷線"))
+                        
+                        time.sleep(interval)
+                        
+                    except Exception as e:
+                        print(f"測距儀讀取錯誤: {e}")
+                        consecutive_failures += 1
+                        self.root.after(0, lambda: self.distance_label.config(text="距離: 連接錯誤"))
+                        
+                        if consecutive_failures == max_failures and not sensor_disconnected:
+                            sensor_disconnected = True
+                            self.root.after(0, lambda err=str(e): messagebox.showwarning("警告", 
+                                f"測距儀錯誤: {err}\n監測將繼續但不會讀取距離數據"))
+                        
+                        time.sleep(interval)
+                        
+            except Exception as e:
+                print(f"測距儀監測錯誤: {e}")
+                self.root.after(0, lambda: messagebox.showwarning("警告", 
+                    f"測距儀監測出現問題: {e}\n監測將繼續但不會有距離數據"))
+            finally:
+                if self.rangefinder_device:
+                    try:
+                        self.rangefinder_device.close()
+                    except:
+                        pass
+                    self.rangefinder_device = None
+        
+        self.rangefinder_thread = threading.Thread(target=rangefinder_worker, daemon=True)
+        self.rangefinder_thread.start()
+    
+    def initialize_rangefinder(self):
+        """初始化測距儀"""
+        self.rangefinder_device.stop_measure()
+        print(">>> 測距儀 ABLE 校正中...")
+        self.rangefinder_device.dll.LKIF2_SetAbleMode(self.OUT_NO, LKIF_ABLEMODE_AUTO)
+        self.rangefinder_device.dll.LKIF2_AbleStart(self.OUT_NO)
+        time.sleep(2)  # 自動等待2秒
+        self.rangefinder_device.dll.LKIF2_AbleStop()
+        print(">>> 測距儀 Auto-zero")
+        self.rangefinder_device.stop_measure()
+        self.rangefinder_device.dll.LKIF2_SetZeroSingle(self.OUT_NO, 1)
+        print(">>> 測距儀初始化完成")
+
     def start_timer_only(self, duration):
         """僅啟動計時器（當音訊監測未啟用時）"""
         def timer_worker():
@@ -523,6 +674,22 @@ class SensorIntegrationGUI:
             # 顯示完成訊息
             self.root.after(0, lambda: messagebox.showinfo("完成", 
                 f"監測完成！\n數據已儲存至: spectrogram_{experiment_id}.tdms"))
+            
+            if self.distance_data:
+                distance_filename = f'distance_{experiment_id}.csv'
+                with open(distance_filename, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Timestamp', 'Elapsed(s)', 'Absolute(mm)', 'Relative(mm)'])
+                    start_time = self.distance_data[0]['timestamp'] if self.distance_data else time.time()
+                    for data in self.distance_data:
+                        elapsed = data['timestamp'] - start_time
+                        writer.writerow([
+                            data['timestamp'], 
+                            f"{elapsed:.3f}", 
+                            f"{data['absolute']:.3f}", 
+                            f"{data['relative']:.3f}"
+                        ])
+                print(f"距離數據已儲存至: {distance_filename}")
             
         except Exception as e:
             print(f"使用signal_package儲存數據錯誤: {e}")
