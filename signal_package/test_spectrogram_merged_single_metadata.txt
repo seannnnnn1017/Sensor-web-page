@@ -1,0 +1,10 @@
+Experiment ID: TEST_MERGED_CSV_003_SINGLE
+Timestamp: 2025-05-29T16:22:00.111951
+Sample Rate: 22050 Hz
+NFFT: 128
+Noverlap: 64
+Time Interval (after interpolation): 0.05 seconds
+Number of Time Bins (after interpolation): 1
+Number of Frequency Bins: 65
+Data File: test_spectrogram_merged_single.csv
+Data Columns: Time(s), then for each frequency (DB-like, Power, SNR(dB))

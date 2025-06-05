@@ -2,20 +2,19 @@ import pyaudio
 import numpy as np
 import sys
 import time
+import threading
+import queue
 
 class AudioRecorder:
     def __init__(self, sample_rate=22050, channels=None, chunk=1024, verbose=True):
         """
         初始化音訊錄製器，自動檢測可用的輸入設備和通道數。
-        參數：
-        - sample_rate: 採樣率（Hz）
-        - channels: 通道數（預設為 None，自動檢測）
-        - chunk: 每次讀取的幀數
-        - verbose: 是否打印可用設備資訊（預設 True）
         """
         self.sample_rate = sample_rate
         self.chunk = chunk
         self.verbose = verbose
+        self.recording_queue = queue.Queue()
+        self.stop_recording = threading.Event()
         
         try:
             self.p = pyaudio.PyAudio()
@@ -26,7 +25,7 @@ class AudioRecorder:
 
         # 檢查可用的輸入設備
         input_devices = [
-            i for i in range(self.p.get_device_count()) 
+            i for i in range(self.p.get_device_count())
             if self.p.get_device_info_by_index(i)['maxInputChannels'] > 0
         ]
 
@@ -42,12 +41,10 @@ class AudioRecorder:
 
         # 自動檢測通道數
         if channels is None:
-            # 嘗試找到第一個有效的通道數
             for device_index in input_devices:
                 dev_info = self.p.get_device_info_by_index(device_index)
                 max_channels = dev_info['maxInputChannels']
-                
-                for ch in [1, 2]:  # 先嘗試單聲道，再嘗試立體聲
+                for ch in [1, 2]:
                     if ch <= max_channels:
                         try:
                             self.stream = self.p.open(
@@ -65,7 +62,6 @@ class AudioRecorder:
                         except Exception:
                             continue
         else:
-            # 如果指定了通道數，則使用指定的通道數
             self.channels = channels
             self.device_index = input_devices[0]
             try:
@@ -82,41 +78,64 @@ class AudioRecorder:
                 print("可能是音訊設備被佔用或權限問題")
                 sys.exit(1)
 
-    def record_audio(self, duration=1):
+    def record_audio_with_timeout(self, duration=1, timeout=2):
         """
-        錄製指定時長的音訊數據。
-        參數：
-        - duration: 錄製時間（秒）
-        返回值：
-        - 錄製的 numpy 陣列，數據類型為 np.int16
+        帶超時機制的錄音方法
         """
-        frames = []
+        self.stop_recording.clear()
         num_chunks = int(self.sample_rate / self.chunk * duration)
         
-        max_retries = 3
-        retry_delay = 1  # 重試間隔秒數
-
-        for attempt in range(max_retries):
+        def recording_worker():
             try:
+                temp_frames = []
                 for _ in range(num_chunks):
-                    data = self.stream.read(self.chunk, exception_on_overflow=False)
-                    frames.append(data)
-                
-                if frames:
-                    audio_data = b''.join(frames)
-                    return np.frombuffer(audio_data, dtype=np.int16)
-                
-            except IOError as e:
-                print(f"音訊讀取錯誤（嘗試 {attempt + 1}/{max_retries}）: {e}")
-                time.sleep(retry_delay)
-                continue
+                    if self.stop_recording.is_set():
+                        break
+                    try:
+                        data = self.stream.read(self.chunk, exception_on_overflow=False)
+                        temp_frames.append(data)
+                    except Exception as e:
+                        print(f"錄音過程中出錯: {e}")
+                        break
+                self.recording_queue.put(temp_frames)
+            except Exception as e:
+                print(f"錄音線程錯誤: {e}")
+                self.recording_queue.put([])
+
+        # 啟動錄音線程
+        recording_thread = threading.Thread(target=recording_worker)
+        recording_thread.daemon = True
+        recording_thread.start()
         
-        print("錄音失敗：多次嘗試後仍無法讀取音訊")
-        return np.zeros(int(self.sample_rate * duration), dtype=np.int16)
+        # 等待錄音完成或超時
+        recording_thread.join(timeout)
+        
+        if recording_thread.is_alive():
+            print("錄音超時，強制停止")
+            self.stop_recording.set()
+            recording_thread.join(0.5)
+            
+        # 獲取錄音數據
+        try:
+            frames = self.recording_queue.get_nowait()
+        except queue.Empty:
+            print("錄音數據獲取失敗")
+            return np.zeros(int(self.sample_rate * duration), dtype=np.int16)
+        
+        if frames:
+            audio_data = b''.join(frames)
+            return np.frombuffer(audio_data, dtype=np.int16)
+        else:
+            return np.zeros(int(self.sample_rate * duration), dtype=np.int16)
+
+    def record_audio(self, duration=1):
+        """改進的錄音方法"""
+        return self.record_audio_with_timeout(duration, timeout=duration + 1)
 
     def close(self):
         """關閉音訊串流並終止 pyaudio。"""
         try:
+            self.stop_recording.set()
             if hasattr(self, 'stream'):
                 self.stream.stop_stream()
                 self.stream.close()
