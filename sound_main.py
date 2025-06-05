@@ -6,9 +6,9 @@ import datetime
 
 
 def main(sample_rate = 22050, #  # 音訊採樣率
-         duration = 10, # # 錄音持續時間
+         duration = 100, # # 錄音持續時間
          update_interval = 0.1, # # 更新間隔
-         history_duration = 100): # # 音訊歷史記錄持續時間
+         history_duration = 1000): # # 音訊歷史記錄持續時間
 
 
     plt.ion()
