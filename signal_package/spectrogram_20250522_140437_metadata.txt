@@ -1,8 +1,0 @@
-Experiment ID: EXP_CSV_20250522_140437
-Timestamp: 2025-05-22T14:04:37.078818
-Sample Rate: 22050 Hz
-NFFT: 256
-Noverlap: 128
-Time Interval: 0.05 seconds
-Number of Time Bins: 187
-Number of Frequency Bins: 129
