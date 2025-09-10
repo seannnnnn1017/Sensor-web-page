@@ -1,0 +1,32 @@
+name: sensor
+channels:
+  - defaults
+dependencies:
+  - ca-certificates=2025.2.25=haa95532_0
+  - openssl=3.0.16=h3f729d1_0
+  - pip=25.0=py39haa95532_0
+  - python=3.9.21=h8205438_1
+  - setuptools=75.8.0=py39haa95532_0
+  - sqlite=3.45.3=h2bbff1b_0
+  - tzdata=2025a=h04d1e81_0
+  - vc=14.42=haa95532_5
+  - vs2015_runtime=14.42.34433=hbfb602d_5
+  - wheel=0.45.1=py39haa95532_0
+  - pip:
+      - contourpy==1.3.0
+      - cycler==0.12.1
+      - fonttools==4.57.0
+      - importlib-resources==6.5.2
+      - kiwisolver==1.4.7
+      - matplotlib==3.9.4
+      - nptdms==1.10.0
+      - numpy==2.0.2
+      - packaging==24.2
+      - pillow==11.2.1
+      - pyaudio==0.2.14
+      - pyparsing==3.2.3
+      - pyserial==3.5
+      - python-dateutil==2.9.0.post0
+      - six==1.17.0
+      - zipp==3.21.0
+prefix: C:\Users\User\miniconda3\envs\sensor
