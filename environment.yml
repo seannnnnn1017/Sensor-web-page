@@ -1,4 +1,4 @@
-name: base
+name: sensor  
 channels:
   - pytorch
   - conda-forge

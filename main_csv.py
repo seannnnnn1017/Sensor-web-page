@@ -10,10 +10,12 @@ import serial.tools.list_ports
 import pyaudio
 from rangefinder import LKIF2Device
 from rangefinder.constants import RC_OK, LKIF_ABLEMODE_AUTO
+import os
 
 # 導入你的自定義模組
+from db_logger import DatabaseLogger
 from temp_py_package import continuous_read
-from signal_package import AudioRecorder, process_and_plot, plot_spectrogram, save_spectrogram_to_tdms
+from signal_package import AudioRecorder, process_and_plot, plot_spectrogram, save_spectrogram_to_csv
 
 class SensorIntegrationGUI:
     def __init__(self, root):
@@ -35,6 +37,16 @@ class SensorIntegrationGUI:
         self.setup_gui()
         self.refresh_com_ports()
         self.refresh_audio_devices()
+
+        # 初始化資料庫記錄器
+        self.db_logger = None
+        try:
+            self.db_logger = DatabaseLogger()
+            if not self.db_logger.is_connected():
+                messagebox.showwarning("資料庫警告", "無法連接到 MongoDB，數據將不會被記錄到資料庫。")
+        except Exception as e:
+            self.db_logger = None
+            messagebox.showerror("資料庫錯誤", f"初始化資料庫記錄器失敗: {e}")
         
         # 測距儀相關變數
         self.rangefinder_device = None
@@ -46,6 +58,7 @@ class SensorIntegrationGUI:
         self.OUT_NO = 0
         self.SAMPLING_US = 1000
         self.RANGE_CODE = 0
+        
     def setup_gui(self):
         # 主框架
         main_frame = ttk.Frame(self.root, padding="10")
@@ -158,6 +171,7 @@ class SensorIntegrationGUI:
         # 距離顯示（在溫度顯示後面）
         self.distance_label = ttk.Label(status_frame, text="距離: -- mm", font=("Arial", 12))
         self.distance_label.grid(row=0, column=1, sticky=tk.W, padx=10)
+        
     def refresh_com_ports(self):
         """重新整理可用的COM端口"""
         try:
@@ -255,7 +269,7 @@ class SensorIntegrationGUI:
             
             # 如果有警告，顯示給用戶並詢問是否繼續
             if warnings:
-                warning_msg = "檢測到以下問題：\n\n" + "\n".join(warnings) + "\n\n是否繼續執行監測？"
+                warning_msg = "檢測到以下問題:\n\n" + "\n".join(warnings) + "\n\n是否繼續執行監測？"
                 if not messagebox.askyesno("警告", warning_msg):
                     return
             
@@ -287,11 +301,13 @@ class SensorIntegrationGUI:
                 self.start_temperature_monitoring()
             else:
                 self.temp_label.config(text="溫度: 未啟用")
+                
             if audio_enabled:
                 self.start_audio_monitoring(sample_rate, update_interval, history_duration, duration)
             else:
                 # 如果音訊監測未啟用，仍需要處理執行時間
                 self.start_timer_only(duration)
+                
             if rangefinder_enabled:  # 新增
                 self.start_rangefinder_monitoring(distance_interval, refl_mode)
             else:
@@ -333,7 +349,6 @@ class SensorIntegrationGUI:
         if self.rangefinder_thread and self.rangefinder_thread.is_alive():  # 新增
             self.rangefinder_thread.join(timeout=1)
 
-    
     def start_temperature_monitoring(self):
         """開始溫度監測執行緒"""
         def temp_worker():
@@ -660,23 +675,60 @@ class SensorIntegrationGUI:
         try:
             experiment_id = "EXP_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             
+            # === 建立輸出資料夾（例如在桌面下） ===
+            
+            # base_dir = os.path.expanduser("/SENSOR-WEB-Page/Sensor_Data")
+            base_dir = "Sensor_Data"
+            os.makedirs(base_dir, exist_ok=True)
+
+            # 以時間建立子資料夾
+            output_dir = os.path.join(base_dir, experiment_id)
+            os.makedirs(output_dir, exist_ok=True)
+                
             # 生成最終頻譜圖並儲存數據
             spec, freqs, bins = plot_spectrogram(audio_history, sample_rate, self.ax_spectrogram, draw_colorbar=True)
-            save_spectrogram_to_tdms(spec, freqs, bins, sample_rate, NFFT=256, noverlap=128, 
+            csv_filename = os.path.join(output_dir, f'spectrogram_{experiment_id}.csv')
+            save_spectrogram_to_csv(spec, freqs, bins, sample_rate, NFFT=256, noverlap=128, 
                                  experiment_id=experiment_id,
-                                 filename=f'spectrogram_{experiment_id}.tdms')
+                                 filename= csv_filename)
             
-            print(f"數據已儲存至: spectrogram_{experiment_id}.tdms")
+            # print(f"數據已儲存至: spectrogram_{experiment_id}.csv")
+            print(f'數據已儲存至: {csv_filename}')
+
+            # === 新增：將數據寫入 MongoDB ===
+            if self.db_logger and self.db_logger.is_connected():
+                try:
+                    end_time = datetime.datetime.utcnow()
+                    duration_seconds = len(audio_history) / sample_rate
+                    start_time = end_time - datetime.timedelta(seconds=duration_seconds)
+                    
+                    self.db_logger.log_spectrogram(
+                        experiment_id=experiment_id,
+                        start_time=start_time,
+                        end_time=end_time,
+                        sample_rate=sample_rate,
+                        nfft=256,  # 與 save_spectrogram_to_csv 中使用的 NFFT 相同
+                        noverlap=128, # 與 save_spectrogram_to_csv 中使用的 noverlap 相同
+                        bins=bins,
+                        freqs=freqs,
+                        spec=spec
+                        # backup_filename=csv_filename
+                    )
+                    print(f"頻譜數據已成功寫入 MongoDB。")
+                except Exception as db_error:
+                    print(f"寫入 MongoDB 失敗: {db_error}")
+                    self.root.after(0, lambda: messagebox.showwarning("資料庫錯誤", f"寫入頻譜數據到 MongoDB 失敗: {db_error}"))
             
             # 更新最終顯示
             self.canvas.draw()
             
             # 顯示完成訊息
             self.root.after(0, lambda: messagebox.showinfo("完成", 
-                f"監測完成！\n數據已儲存至: spectrogram_{experiment_id}.tdms"))
+                f"監測完成！\n數據已儲存至: spectrogram_{experiment_id}.csv"))
             
             if self.distance_data:
-                distance_filename = f'distance_{experiment_id}.csv'
+                # distance_filename = f'distance_{experiment_id}.csv'
+                distance_filename = os.path.join(output_dir, f'distance_{experiment_id}.csv')
                 with open(distance_filename, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(['Timestamp', 'Elapsed(s)', 'Absolute(mm)', 'Relative(mm)'])
@@ -705,6 +757,11 @@ def main():
         def on_closing():
             if app.running:
                 app.stop_monitoring()
+            
+            # 新增：關閉資料庫連接
+            if app.db_logger:
+                app.db_logger.close()
+                
             root.destroy()
         
         root.protocol("WM_DELETE_WINDOW", on_closing)
